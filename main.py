@@ -2,19 +2,17 @@ import os
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from typing import Optional, List
+from typing import List
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, EmailStr
 
 from supabase import create_client, Client
-
 
 SUPABASE_URL = "https://puzorkxwukqaaupsroux.supabase.co"
 SUPABASE_SERVICE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB1em9ya3h3dWtxYWF1cHNyb3V4Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2NTAwMjczOCwiZXhwIjoyMDgwNTc4NzM4fQ.ebXPmLlZAev3M3yhtoeu-q1zkELtW5wZ8hIeRVQ0cVU"
 
-SMTP_HOST = "smtp.gmail.com"
+SMTP_HOST = ""
 SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
 SMTP_USER = "skywave.top@gmail.com"
 SMTP_PASSWORD = "ownr wzmc vald fsak"
@@ -42,20 +40,6 @@ allow_headers=["*"],
 
 
 
-class NewsletterPayload(BaseModel):
-	subject: str
-	html_body: str
-	test_email: Optional[EmailStr] = None
-	send_test_only: bool = False
-
-
-class SendResult(BaseModel):
-	message: str
-	sent_count: int = 0
-	test_only: bool = False
-
-
-
 def send_email(to_email: str, subject: str, html_body: str):
 	"""
 	Send one HTML email using SMTP.
@@ -65,6 +49,7 @@ def send_email(to_email: str, subject: str, html_body: str):
 	msg["From"] = FROM_EMAIL
 	msg["To"] = to_email
 
+	
 	text_body = "This email contains HTML content. Please enable HTML view."
 	part_text = MIMEText(text_body, "plain")
 	part_html = MIMEText(html_body, "html")
@@ -72,7 +57,7 @@ def send_email(to_email: str, subject: str, html_body: str):
 	msg.attach(part_text)
 	msg.attach(part_html)
 
-	
+
 	with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
 		server.starttls()
 		server.login(SMTP_USER, SMTP_PASSWORD)
@@ -81,8 +66,8 @@ def send_email(to_email: str, subject: str, html_body: str):
 
 def get_all_subscriber_emails() -> List[str]:
 	"""
-	Fetch all distinct emails from the newsletter_subscribers table in Supabase.
-	Uses the service_role key so it ignores RLS and can read everything.
+	Fetch all distinct emails from newsletter_subscribers (Supabase).
+	Uses service_role key so it ignores RLS.
 	"""
 	resp = supabase.table("newsletter_subscribers").select("email").execute()
 	rows = resp.data or []
@@ -93,8 +78,8 @@ def get_all_subscriber_emails() -> List[str]:
 		if email and isinstance(email, str):
 			emails.append(email.strip())
 
-	unique = sorted({e for e in emails if e})
-	return unique
+	
+	return sorted({e for e in emails if e})
 
 
 
@@ -103,38 +88,55 @@ def root():
 	return {"status": "ok", "message": "Catch A Crime newsletter server running."}
 
 
-@app.post("/send-newsletter", response_model=SendResult)
-def send_newsletter(payload: NewsletterPayload):
+@app.post("/send-newsletter")
+async def send_newsletter(request: Request):
 	"""
-	Called by newsletter_admin.html (your admin page).
+	Called by newsletter_admin.html.
 
-	- If send_test_only = True: send to test_email only.
-	- Else: optional test to test_email, then broadcast to all subscribers.
+	Expected JSON:
+	{
+	"subject": "string",
+	"html_body": "string",
+	"test_email": "optional string",
+	"send_test_only": bool
+	}
 	"""
-	subject = payload.subject.strip()
-	html_body = payload.html_body.strip()
+	try:
+		payload = await request.json()
+	except Exception:
+		raise HTTPException(status_code=400, detail="Invalid JSON body.")
+
+
+	subject = str(payload.get("subject", "")).strip()
+	html_body = str(payload.get("html_body", "")).strip()
+	test_email_raw = payload.get("test_email")
+	send_test_only = bool(payload.get("send_test_only", False))
+
+	test_email = None
+	if isinstance(test_email_raw, str) and test_email_raw.strip():
+		test_email = test_email_raw.strip()
 
 	if not subject or not html_body:
-		raise HTTPException(status_code=400, detail="Subject and body are required.")
+		raise HTTPException(status_code=400, detail="Subject and html_body are required.")
 
 	
-	if payload.send_test_only:
-		if not payload.test_email:
-			raise HTTPException(status_code=400, detail="Test email address is required for test mode.")
+	if send_test_only:
+		if not test_email:
+			raise HTTPException(status_code=400, detail="test_email is required when send_test_only is true.")
 		try:
-			send_email(str(payload.test_email), subject, html_body)
+			send_email(test_email, subject, html_body)
 		except Exception as e:
 			raise HTTPException(status_code=500, detail=f"Failed to send test email: {e}")
-		return SendResult(
-			message=f"Test email sent to {payload.test_email}.",
-			sent_count=1,
-			test_only=True
-		)
+		return {
+			"message": f"Test email sent to {test_email}.",
+			"sent_count": 1,
+			"test_only": True
+		}
 
-
-	if payload.test_email:
+	
+	if test_email:
 		try:
-			send_email(str(payload.test_email), subject, html_body)
+			send_email(test_email, subject, html_body)
 		except Exception as e:
 			raise HTTPException(status_code=500, detail=f"Failed to send test email before broadcast: {e}")
 
@@ -144,11 +146,11 @@ def send_newsletter(payload: NewsletterPayload):
 		raise HTTPException(status_code=500, detail=f"Failed to load subscribers: {e}")
 
 	if not subscribers:
-		return SendResult(
-			message="No subscribers found in newsletter_subscribers.",
-			sent_count=0,
-			test_only=False
-		)
+		return {
+			"message": "No subscribers found in newsletter_subscribers.",
+			"sent_count": 0,
+			"test_only": False
+		}
 
 	sent_count = 0
 	errors = 0
@@ -165,16 +167,14 @@ def send_newsletter(payload: NewsletterPayload):
 	if errors:
 		msg += f" {errors} emails failed (see logs)."
 
-	return SendResult(
-		message=msg,
-		sent_count=sent_count,
-		test_only=False
-	)
-
+	return {
+		"message": msg,
+		"sent_count": sent_count,
+		"test_only": False
+	}
 
 
 if __name__ == "__main__":
 	import uvicorn
-
 	port = int(os.getenv("PORT", "8000"))
 	uvicorn.run("server:app", host="0.0.0.0", port=port, reload=True)
