@@ -12,7 +12,7 @@ from supabase import create_client, Client
 SUPABASE_URL = "https://puzorkxwukqaaupsroux.supabase.co"
 SUPABASE_SERVICE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB1em9ya3h3dWtxYWF1cHNyb3V4Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2NTAwMjczOCwiZXhwIjoyMDgwNTc4NzM4fQ.ebXPmLlZAev3M3yhtoeu-q1zkELtW5wZ8hIeRVQ0cVU"
 
-SMTP_HOST = ""
+SMTP_HOST = "smtp.gmail.com"
 SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
 SMTP_USER = "skywave.top@gmail.com"
 SMTP_PASSWORD = "ownr wzmc vald fsak"
