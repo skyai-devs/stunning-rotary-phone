@@ -12,14 +12,13 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # -------- ENVIRONMENT CONFIG --------
-SUPABASE_URL = os.getenv("SUPABASE_URL") # e.g. https://your-project-id.supabase.co
-SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+SUPABASE_URL = 'https://puzorkxwukqaaupsroux.supabase.co'
+SUPABASE_SERVICE_ROLE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB1em9ya3h3dWtxYWF1cHNyb3V4Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2NTAwMjczOCwiZXhwIjoyMDgwNTc4NzM4fQ.ebXPmLlZAev3M3yhtoeu-q1zkELtW5wZ8hIeRVQ0cVU'
+NEWS_FROM_EMAIL = 'skywave.top@gmail.com'
+NEWS_FROM_NAME ="catch a crime"
+NEWS_EMAIL_PASSWORD = "Lisakhanya12." # SMTP password / app password
 
-NEWS_FROM_EMAIL = os.getenv("NEWS_FROM_EMAIL") # sender email (e.g. your gmail)
-NEWS_FROM_NAME = os.getenv("NEWS_FROM_NAME", "Catch A Crime")
-NEWS_EMAIL_PASSWORD = os.getenv("NEWS_EMAIL_PASSWORD") # SMTP password / app password
-
-ADMIN_API_KEY = os.getenv("ADMIN_API_KEY") # secret string to protect /send-newsletter
+ADMIN_API_KEY = '13323543647546344734374437734637374637374637374637'
 PORT = int(os.getenv("PORT", "8000"))
 
 # SMTP settings (Gmail defaults)
