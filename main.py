@@ -8,32 +8,28 @@ from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
-# Load .env if running locally; on Railway env vars are injected
-load_dotenv()
 
-# -------- ENVIRONMENT CONFIG --------
 SUPABASE_URL = 'https://puzorkxwukqaaupsroux.supabase.co'
 SUPABASE_SERVICE_ROLE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB1em9ya3h3dWtxYWF1cHNyb3V4Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2NTAwMjczOCwiZXhwIjoyMDgwNTc4NzM4fQ.ebXPmLlZAev3M3yhtoeu-q1zkELtW5wZ8hIeRVQ0cVU'
 NEWS_FROM_EMAIL = 'skywave.top@gmail.com'
 NEWS_FROM_NAME ="catch a crime"
-NEWS_EMAIL_PASSWORD = "Lisakhanya12." # SMTP password / app password
-
+NEWS_EMAIL_PASSWORD = "Lisakhanya12."
 ADMIN_API_KEY = '13323543647546344734374437734637374637374637374637'
 PORT = int(os.getenv("PORT", "8000"))
 
-# SMTP settings (Gmail defaults)
+
 SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")
 SMTP_PORT = int(os.getenv("SMTP_PORT", "465")) # 465 for SSL, 587 for TLS
 SMTP_USE_TLS = os.getenv("SMTP_USE_TLS", "false").lower() == "true"
 
 if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
-raise RuntimeError("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY env vars")
+	raise RuntimeError("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY env vars")
 
 if not NEWS_FROM_EMAIL or not NEWS_EMAIL_PASSWORD:
-raise RuntimeError("Missing NEWS_FROM_EMAIL or NEWS_EMAIL_PASSWORD env vars")
+	raise RuntimeError("Missing NEWS_FROM_EMAIL or NEWS_EMAIL_PASSWORD env vars")
 
 if not ADMIN_API_KEY:
-raise RuntimeError("Missing ADMIN_API_KEY env var")
+	raise RuntimeError("Missing ADMIN_API_KEY env var")
 
 # -------- FASTAPI APP --------
 app = FastAPI(title="Catch A Crime Newsletter Server")
