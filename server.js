@@ -1,207 +1,132 @@
 import express from "express";
 import cors from "cors";
-import nodemailer from "nodemailer";
 import { createClient } from "@supabase/supabase-js";
+import fetch from "node-fetch";
 
-
-
-const SUPABASE_URL ="https://puzorkxwukqaaupsroux.supabase.co";
-const SUPABASE_SERVICE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB1em9ya3h3dWtxYWF1cHNyb3V4Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2NTAwMjczOCwiZXhwIjoyMDgwNTc4NzM4fQ.ebXPmLlZAev3M3yhtoeu-q1zkELtW5wZ8hIeRVQ0cVU"; 
-const SMTP_HOST = "smtp.gmail.com";
-const SMTP_PORT = "587";
-const SMTP_USER = "skywave.top@gmail.com";
-const SMTP_PASSWORD ="xugh akbm ogpi fjhw";
-const FROM_EMAIL = "skywave.top@gmail.com";
+const SUPABASE_URL = "https://puzorkxwukqaaupsroux.supabase.co";
+const SUPABASE_SERVICE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB1em9ya3h3dWtxYWF1cHNyb3V4Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2NTAwMjczOCwiZXhwIjoyMDgwNTc4NzM4fQ.ebXPmLlZAev3M3yhtoeu-q1zkELtW5wZ8hIeRVQ0cVU";
+const RESEND_API_KEY = "re_d8u2SGXU_FUwr3BwkDgcSrLHc3FkLusVy";
+const FROM_EMAIL ="onboarding@resend.dev";
+const PORT = "8080";
 
 if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
-throw new Error("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set.");
+throw new Error("SUPABASE_URL and SUPABASE_SERVICE_KEY must be set");
 }
-
-if (!SMTP_HOST || !SMTP_USER || !SMTP_PASSWORD) {
-throw new Error("SMTP_HOST, SMTP_USER, and SMTP_PASSWORD must be set.");
+if (!RESEND_API_KEY || !FROM_EMAIL) {
+throw new Error("RESEND_API_KEY and FROM_EMAIL must be set");
 }
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
-
-const transporter = nodemailer.createTransport({
-host: SMTP_HOST,
-port: SMTP_PORT,
-secure: SMTP_PORT === 465, 
-auth: {
-user: SMTP_USER,
-pass: SMTP_PASSWORD
-}
-});
-
-
-transporter.verify((err, success) => {
-if (err) {
-console.error("[SMTP] Verification failed:", err);
-} else {
-console.log("[SMTP] Ready to send emails");
-}
-});
-
-
-
 const app = express();
-app.use(cors({ origin: "*", credentials: false }));
-app.use(express.json()); 
+app.use(cors());
+app.use(express.json());
 
-async function sendEmail(to, subject, htmlBody) {
-console.log(`[sendEmail] Sending to ${to} | subject="${subject}"`);
-
-const mailOptions = {
+async function sendEmail(to, subject, html) {
+const resp = await fetch("https://api.resend.com/emails", {
+method: "POST",
+headers: {
+Authorization: `Bearer ${RESEND_API_KEY}`,
+"Content-Type": "application/json",
+},
+body: JSON.stringify({
 from: FROM_EMAIL,
-to,
+to: [to],
 subject,
-text: "This email contains HTML content. Please enable HTML view.",
-html: htmlBody
-};
-
-await transporter.sendMail(mailOptions);
-console.log(`[sendEmail] Successfully sent to ${to}`);
-}
-
-async function getAllSubscriberEmails() {
-console.log("[getAllSubscriberEmails] Loading from Supabase...");
-const { data, error } = await supabase
-.from("newsletter_subscribers")
-.select("email");
-
-if (error) {
-console.error("[getAllSubscriberEmails] Supabase error:", error);
-throw new Error("Supabase error: " + error.message);
-}
-
-const rows = data || [];
-console.log("[getAllSubscriberEmails] Rows:", rows.length);
-
-const unique = Array.from(
-new Set(
-rows
-.map(r => (r.email || "").trim())
-.filter(e => e.length > 0)
-)
-);
-
-console.log("[getAllSubscriberEmails] Unique emails:", unique);
-return unique;
-}
-
-
-
-app.get("/", (req, res) => {
-res.json({ status: "ok", message: "Catch A Crime newsletter server running." });
+html,
+}),
 });
 
+if (!resp.ok) {
+const text = await resp.text();
+console.error("[Resend] Error", resp.status, text.slice(0, 300));
+throw new Error("Failed to send email via Resend");
+}
+}
+
+app.get("/", (_req, res) => {
+res.send("Catch A Crime newsletter server is running.");
+});
 
 app.post("/send-newsletter", async (req, res) => {
-const payload = req.body || {};
-console.log("[/send-newsletter] Payload:", payload);
+try {
+const { subject, html_body, test_email, send_test_only } = req.body || {};
 
-const subject = String(payload.subject || "").trim();
-const htmlBody = String(payload.html_body || "").trim();
-const testEmailRaw = payload.test_email;
-const sendTestOnly = Boolean(payload.send_test_only);
-
-const testEmail =
-typeof testEmailRaw === "string" && testEmailRaw.trim().length > 0
-? testEmailRaw.trim()
-: null;
-
-if (!subject || !htmlBody) {
+if (!subject || !html_body) {
 return res
 .status(400)
-.json({ error: "Subject and html_body are required." });
+.json({ error: "subject and html_body are required" });
 }
 
-
-if (sendTestOnly) {
-if (!testEmail) {
+if (send_test_only) {
+if (!test_email) {
 return res
 .status(400)
-.json({ error: "test_email is required when send_test_only is true." });
+.json({ error: "test_email is required for test send" });
 }
 
-try {
-await sendEmail(testEmail, subject, htmlBody);
+await sendEmail(test_email, subject, html_body);
 return res.json({
-message: `Test email sent to ${testEmail}.`,
-sent_count: 1,
-test_only: true
+ok: true,
+mode: "test",
+sent: 1,
+message: `Test email sent to ${test_email}`,
 });
-} catch (err) {
-console.error("[/send-newsletter] Error sending test:", err);
+}
+
+const { data, error } = await supabase
+.from("newsletter_subscribers")
+.select("email")
+.neq("email", null);
+
+if (error) {
+console.error("Supabase select error:", error);
 return res
 .status(500)
-.json({ error: "Failed to send test email: " + err.message });
-}
-}
-
-
-if (testEmail) {
-try {
-console.log("[/send-newsletter] Sending pre-broadcast test to", testEmail);
-await sendEmail(testEmail, subject, htmlBody);
-} catch (err) {
-console.error("[/send-newsletter] Error sending pre-broadcast test:", err);
-return res.status(500).json({
-error: "Failed to send test email before broadcast: " + err.message
-});
-}
+.json({ error: "Failed to fetch subscribers from Supabase" });
 }
 
-let subscribers;
-try {
-subscribers = await getAllSubscriberEmails();
-} catch (err) {
-console.error("[/send-newsletter] Error loading subscribers:", err);
-return res
-.status(500)
-.json({ error: "Failed to load subscribers: " + err.message });
-}
+const emails = (data || [])
+.map((row) => row.email)
+.filter((e) => typeof e === "string" && e.includes("@"));
 
-if (!subscribers || subscribers.length === 0) {
-console.log("[/send-newsletter] No subscribers found.");
+if (!emails.length) {
 return res.json({
-message: "No subscribers found in newsletter_subscribers.",
-sent_count: 0,
-test_only: false
+ok: true,
+mode: "broadcast",
+sent: 0,
+total: 0,
+message: "No subscribers found.",
 });
 }
-
-console.log(
-`[/send-newsletter] Broadcasting to ${subscribers.length} subscribers...`
-);
 
 let sentCount = 0;
-let errors = 0;
 
-for (const email of subscribers) {
+for (const email of emails) {
 try {
-await sendEmail(email, subject, htmlBody);
+await sendEmail(email, subject, html_body);
 sentCount += 1;
+console.log("[sendEmail] Sent to", email);
 } catch (err) {
-console.error(`[send-newsletter] Error sending to ${email}:`, err);
-errors += 1;
+console.error("[sendEmail] Error sending to", email, err.message);
 }
 }
-
-const msg = `Newsletter send finished: ${sentCount} success, ${errors} failed.`;
-console.log("[/send-newsletter] " + msg);
 
 return res.json({
-message: msg,
-sent_count: sentCount,
-test_only: false
+ok: true,
+mode: "broadcast",
+total: emails.length,
+sent: sentCount,
+message: `Broadcast finished. Sent to ${sentCount}/${emails.length} subscribers.`,
 });
+} catch (err) {
+console.error("[/send-newsletter] Handler error:", err);
+return res
+.status(500)
+.json({ error: "Unexpected server error", detail: err.message });
+}
 });
 
-
-
-const PORT = parseInt(process.env.PORT || "8000", 10);
 app.listen(PORT, () => {
 console.log(`Newsletter server listening on port ${PORT}`);
 });
