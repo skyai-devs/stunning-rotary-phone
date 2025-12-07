@@ -9,6 +9,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from supabase import create_client, Client
 
+
+
 SUPABASE_URL = "https://puzorkxwukqaaupsroux.supabase.co"
 SUPABASE_SERVICE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB1em9ya3h3dWtxYWF1cHNyb3V4Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2NTAwMjczOCwiZXhwIjoyMDgwNTc4NzM4fQ.ebXPmLlZAev3M3yhtoeu-q1zkELtW5wZ8hIeRVQ0cVU"
 
@@ -28,7 +30,6 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
 app = FastAPI(title="Catch A Crime – Newsletter API")
 
-
 app.add_middleware(
 CORSMiddleware,
 allow_origins=["*"], 
@@ -39,17 +40,19 @@ allow_headers=["*"],
 
 
 
-
 def send_email(to_email: str, subject: str, html_body: str):
 	"""
 	Send one HTML email using SMTP.
+	Logs what it's doing so you can see it in Railway logs.
 	"""
+	print(f"[send_email] Preparing to send to {to_email} with subject '{subject}'")
+
 	msg = MIMEMultipart("alternative")
 	msg["Subject"] = subject
 	msg["From"] = FROM_EMAIL
 	msg["To"] = to_email
 
-	
+
 	text_body = "This email contains HTML content. Please enable HTML view."
 	part_text = MIMEText(text_body, "plain")
 	part_html = MIMEText(html_body, "html")
@@ -57,11 +60,18 @@ def send_email(to_email: str, subject: str, html_body: str):
 	msg.attach(part_text)
 	msg.attach(part_html)
 
-
-	with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
-		server.starttls()
-		server.login(SMTP_USER, SMTP_PASSWORD)
-		server.sendmail(FROM_EMAIL, [to_email], msg.as_string())
+	try:
+		with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
+			print(f"[send_email] Connecting to SMTP {SMTP_HOST}:{SMTP_PORT}")
+			server.starttls()
+			print("[send_email] TLS started, logging in...")
+			server.login(SMTP_USER, SMTP_PASSWORD)
+			print(f"[send_email] Logged in as {SMTP_USER}, sending...")
+			server.sendmail(FROM_EMAIL, [to_email], msg.as_string())
+			print(f"[send_email] Successfully sent to {to_email}")
+	except Exception as e:
+		print(f"[send_email] ERROR sending to {to_email}: {e}")
+		raise
 
 
 def get_all_subscriber_emails() -> List[str]:
@@ -69,8 +79,15 @@ def get_all_subscriber_emails() -> List[str]:
 	Fetch all distinct emails from newsletter_subscribers (Supabase).
 	Uses service_role key so it ignores RLS.
 	"""
+	print("[get_all_subscriber_emails] Loading from Supabase...")
 	resp = supabase.table("newsletter_subscribers").select("email").execute()
+
+	if resp.error:
+		print(f"[get_all_subscriber_emails] Supabase error: {resp.error}")
+		raise RuntimeError(f"Supabase error: {resp.error}")
+
 	rows = resp.data or []
+	print(f"[get_all_subscriber_emails] Raw rows count: {len(rows)}")
 
 	emails: List[str] = []
 	for row in rows:
@@ -78,8 +95,9 @@ def get_all_subscriber_emails() -> List[str]:
 		if email and isinstance(email, str):
 			emails.append(email.strip())
 
-	
-	return sorted({e for e in emails if e})
+	unique = sorted({e for e in emails if e})
+	print(f"[get_all_subscriber_emails] Unique emails: {unique}")
+	return unique
 
 
 
@@ -106,6 +124,7 @@ async def send_newsletter(request: Request):
 	except Exception:
 		raise HTTPException(status_code=400, detail="Invalid JSON body.")
 
+	print(f"[send-newsletter] Payload received: {payload}")
 
 	subject = str(payload.get("subject", "")).strip()
 	html_body = str(payload.get("html_body", "")).strip()
@@ -119,10 +138,11 @@ async def send_newsletter(request: Request):
 	if not subject or not html_body:
 		raise HTTPException(status_code=400, detail="Subject and html_body are required.")
 
-	
+
 	if send_test_only:
 		if not test_email:
 			raise HTTPException(status_code=400, detail="test_email is required when send_test_only is true.")
+		print(f"[send-newsletter] Test-only mode. Sending to {test_email}")
 		try:
 			send_email(test_email, subject, html_body)
 		except Exception as e:
@@ -133,8 +153,8 @@ async def send_newsletter(request: Request):
 			"test_only": True
 		}
 
-	
 	if test_email:
+		print(f"[send-newsletter] Broadcast mode: sending test first to {test_email}")
 		try:
 			send_email(test_email, subject, html_body)
 		except Exception as e:
@@ -146,12 +166,14 @@ async def send_newsletter(request: Request):
 		raise HTTPException(status_code=500, detail=f"Failed to load subscribers: {e}")
 
 	if not subscribers:
+		print("[send-newsletter] No subscribers found.")
 		return {
 			"message": "No subscribers found in newsletter_subscribers.",
 			"sent_count": 0,
 			"test_only": False
 		}
 
+	print(f"[send-newsletter] Sending newsletter to {len(subscribers)} subscribers...")
 	sent_count = 0
 	errors = 0
 
@@ -160,12 +182,11 @@ async def send_newsletter(request: Request):
 			send_email(email, subject, html_body)
 			sent_count += 1
 		except Exception as e:
-			print(f"Error sending to {email}: {e}")
+			print(f"[send-newsletter] Error sending to {email}: {e}")
 			errors += 1
 
-	msg = f"Newsletter sent to {sent_count} subscribers."
-	if errors:
-		msg += f" {errors} emails failed (see logs)."
+	msg = f"Newsletter sent attempt finished: {sent_count} success, {errors} failed."
+	print("[send-newsletter]", msg)
 
 	return {
 		"message": msg,
