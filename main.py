@@ -17,7 +17,7 @@ SUPABASE_SERVICE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmF
 SMTP_HOST = "smtp.gmail.com"
 SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
 SMTP_USER = "skywave.top@gmail.com"
-SMTP_PASSWORD = "ownr wzmc vald fsak"
+SMTP_PASSWORD = "xugh akbm ogpi fjhw"
 FROM_EMAIL = "skywave.top@gmail.com"
 
 if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
